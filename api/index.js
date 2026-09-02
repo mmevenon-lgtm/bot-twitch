@@ -1,5 +1,3 @@
-const axios = require("axios");
-
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -12,12 +10,11 @@ module.exports = async (req, res) => {
     if (!q.trim()) return res.send("🤖 Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
 
     try {
-      const response = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(q)}`, {
-        params: { system: "Responde en español en 1 frase muy corta." },
-        timeout: 3000
-      });
+      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=Responde+en+espanol+muy+corto`);
+      if (!response.ok) return res.send("🤖 La IA no está disponible.");
 
-      let text = String(response.data).replace(/[\r\n]+/g, " ").trim();
+      let text = await response.text();
+      text = text.replace(/[\r\n]+/g, " ").trim();
       if (text.length > 150) text = text.substring(0, 147) + "...";
 
       return res.send(`🤖 ${text}`);
@@ -47,9 +44,11 @@ module.exports = async (req, res) => {
 
     try {
       const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
-      const response = await axios.get(targetUrl, { timeout: 3000 });
+      const response = await fetch(targetUrl);
+      if (!response.ok) return res.send(`🎮 No hay datos para ${name}#${tag}.`);
 
-      let result = String(response.data).trim();
+      let result = await response.text();
+      result = result.trim();
       if (result.length > 150) result = result.substring(0, 147) + "...";
 
       return res.send(`🎮 ${name}#${tag} | ${result}`);
@@ -58,5 +57,5 @@ module.exports = async (req, res) => {
     }
   }
 
-  return res.send("OK - Servidor Funcionando");
+  return res.send("OK");
 };
