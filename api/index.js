@@ -1,65 +1,49 @@
 module.exports = async (req, res) => {
-  // Encabezados para evitar almacenamiento en caché y forzar texto plano
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 
   const action = req.query.action || "";
   const q = req.query.q || "";
 
-  // 1. COMANDO DE IA (!ia)
+  // COMANDO IA
   if (action === "ia") {
-    if (!q || !q.trim()) return res.send("🤖 Escribe una pregunta. Ejemplo: !ia hola");
+    if (!q.trim()) return res.send("🤖 Escribe una pregunta.");
 
     try {
-      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=Responde+en+espanol+en+menos+de+10+palabras`);
+      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=Responde+en+espanol+en+una+frase+corta`);
       if (!response.ok) return res.send("🤖 La IA no está disponible.");
 
       let text = await response.text();
       text = text.replace(/[\r\n]+/g, " ").trim();
-      if (text.length > 100) text = text.substring(0, 97) + "...";
+      if (text.length > 150) text = text.substring(0, 147) + "...";
 
       return res.send(`🤖 ${text}`);
     } catch {
-      return res.send("🤖 La IA no pudo responder ahora.");
+      return res.send("🤖 Tiempo de respuesta agotado.");
     }
   }
 
-  // 2. COMANDO DE RANK (!rank)
+  // COMANDO RANK
   if (action === "rank") {
-    if (!q || !q.trim()) return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
+    if (!q.trim()) return res.send("🎮 Usa: !rank Nombre#Tag");
 
-    let name = "";
-    let tag = "";
+    const parts = q.includes("#") ? q.split("#") : q.split(" ");
+    const name = (parts[0] || "").trim();
+    const tag = (parts[1] || "").trim();
 
-    if (q.includes("#")) {
-      const parts = q.split("#");
-      name = parts[0].trim();
-      tag = parts[1].trim();
-    } else {
-      name = q.trim();
-      tag = "";
-    }
-
-    if (!name) return res.send("🎮 Usa el formato: !rank Nombre#TAG");
+    if (!name || !tag) return res.send("🎮 Formato incorrecto. Ejemplo: !rank Nombre#Tag");
 
     try {
-      const targetUrl = tag 
-        ? `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`
-        : `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}?show=combo&display=0`;
-
-      const response = await fetch(targetUrl);
-      if (!response.ok) return res.send(`🎮 No hay datos para ${q}.`);
+      const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
+      const response = await fetch(url);
+      if (!response.ok) return res.send(`🎮 No hay datos para ${name}#${tag}.`);
 
       let result = await response.text();
-      result = result.trim();
-      if (result.length > 120) result = result.substring(0, 117) + "...";
-
-      return res.send(`🎮 ${q} | ${result}`);
+      return res.send(`🎮 ${name}#${tag} | ${result.trim()}`);
     } catch {
-      return res.send(`🎮 No se encontraron datos para ${q}.`);
+      return res.send("🎮 Error al consultar el rango.");
     }
   }
 
-  return res.send("Servidor activo.");
+  return res.send("Servidor Activo");
 };
