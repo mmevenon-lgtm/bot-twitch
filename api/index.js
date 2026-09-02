@@ -1,6 +1,4 @@
-const https = require("https");
-
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
@@ -9,46 +7,26 @@ module.exports = (req, res) => {
 
   // 1. COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q || !q.trim()) return res.send("🤖 Hazme una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q || !q.trim()) return res.send("🤖 Pregúntame algo. Ejemplo: !ia ¿Qué es Valorant?");
 
-    const postData = new URLSearchParams({ text: q, lc: "es" }).toString();
+    try {
+      // Usamos la API pública de Pollinations sin headers complejos (responde en milisegundos)
+      const prompt = encodeURIComponent("Responde en español, 1 frase muy corta, sin saltos de línea.");
+      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=${prompt}`);
 
-    const options = {
-      hostname: "api.simsimi.vn",
-      path: "/v1/simtalk",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(postData)
-      },
-      timeout: 3500
-    };
+      if (!response.ok) return res.send("🤖 La IA no está disponible en este momento.");
 
-    const request = https.request(options, (response) => {
-      let body = "";
-      response.on("data", (chunk) => (body += chunk));
-      response.on("end", () => {
-        try {
-          const data = JSON.parse(body);
-          let reply = data.message || "Sin respuesta.";
-          reply = reply.replace(/[\r\n]+/g, " ").trim();
-          if (reply.length > 150) reply = reply.substring(0, 147) + "...";
-          res.send(`🤖 ${reply}`);
-        } catch {
-          res.send("🤖 Respuesta no válida.");
-        }
-      });
-    });
+      let text = await response.text();
+      text = text.replace(/[\r\n]+/g, " ").trim();
 
-    request.on("error", () => res.send("🤖 Error de conexión con la IA."));
-    request.on("timeout", () => {
-      request.destroy();
-      res.send("🤖 Tiempo agotado.");
-    });
+      if (text.length > 150) {
+        text = text.substring(0, 147) + "...";
+      }
 
-    request.write(postData);
-    request.end();
-    return;
+      return res.send(`🤖 ${text}`);
+    } catch {
+      return res.send("🤖 La IA tardó demasiado en responder.");
+    }
   }
 
   // 2. COMANDO DE RANK (!rank)
@@ -68,22 +46,32 @@ module.exports = (req, res) => {
       tag = parts[1];
     }
 
-    if (!name || !tag) return res.send("🎮 Usa el formato: !rank Nombre#TAG");
+    if (!name || !tag) return res.send("🎮 Formato correcto: !rank Nombre#TAG");
 
-    const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
+    try {
+      const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500); // Cancela si la API tarda más de 3.5s
 
-    https.get(targetUrl, { timeout: 3500 }, (response) => {
-      let data = "";
-      response.on("data", (chunk) => (data += chunk));
-      response.on("end", () => {
-        let result = data.trim();
-        if (result.length > 180) result = result.substring(0, 177) + "...";
-        res.send(`🎮 ${name}#${tag} | ${result}`);
-      });
-    }).on("error", () => {
-      res.send(`🎮 No se encontraron datos para ${name}#${tag}.`);
-    });
-    return;
+      const response = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return res.send(`🎮 No se encontraron datos para ${name}#${tag}.`);
+      }
+
+      let result = await response.text();
+      result = result.trim();
+
+      if (result.length > 180) {
+        result = result.substring(0, 177) + "...";
+      }
+
+      return res.send(`🎮 ${name}#${tag} | ${result}`);
+    } catch {
+      return res.send(`🎮 La API de Valorant no respondió a tiempo para ${name}#${tag}.`);
+    }
   }
 
   return res.send("OK");
