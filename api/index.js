@@ -1,4 +1,4 @@
-const axios = require("axios");
+const https = require("https");
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -6,37 +6,55 @@ module.exports = async (req, res) => {
 
   const { action, q } = req.query;
 
-  // COMANDO DE IA (!ia)
+  // 1. COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q) return res.send("🤖 Hazme una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q) return res.send("🤖 Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
 
     try {
-      // API ligera y sin timeouts de generación
-      const url = `https://api.simsimi.vn/v1/simtalk`;
-      const bodyParams = new URLSearchParams();
-      bodyParams.append("text", q);
-      bodyParams.append("lc", "es");
+      const postData = new URLSearchParams({ text: q, lc: "es" }).toString();
+      
+      const options = {
+        hostname: "api.simsimi.vn",
+        path: "/v1/simtalk",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(postData)
+        },
+        timeout: 4000
+      };
 
-      const response = await axios.post(url, bodyParams, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        timeout: 5000
+      const request = https.request(options, (response) => {
+        let body = "";
+        response.on("data", (chunk) => (body += chunk));
+        response.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            let reply = data.message || "Sin respuesta.";
+            reply = reply.replace(/[\r\n]+/g, " ").trim();
+            if (reply.length > 150) reply = reply.substring(0, 147) + "...";
+            res.send(`🤖 ${reply}`);
+          } catch {
+            res.send("🤖 La IA dio una respuesta no válida.");
+          }
+        });
       });
 
-      let reply = response.data?.message || "Sin respuesta.";
-      
-      // Limpieza de caracteres y recorte estricto
-      reply = reply.replace(/[\r\n]+/g, " ").trim();
-      if (reply.length > 150) {
-        reply = reply.substring(0, 147) + "...";
-      }
+      request.on("error", () => res.send("🤖 La IA no pudo responder ahora."));
+      request.on("timeout", () => {
+        request.destroy();
+        res.send("🤖 Tiempo de espera agotado.");
+      });
 
-      return res.send(`🤖 ${reply}`);
-    } catch (err) {
-      return res.send("🤖 La IA no pudo responder en este momento.");
+      request.write(postData);
+      request.end();
+    } catch {
+      return res.send("🤖 Error en la solicitud de IA.");
     }
+    return;
   }
 
-  // COMANDO DE RANK (!rank)
+  // 2. COMANDO DE RANK (!rank)
   if (action === "rank") {
     if (!q) return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
 
@@ -55,15 +73,21 @@ module.exports = async (req, res) => {
 
     if (!name || !tag) return res.send("🎮 Usa el formato: !rank Nombre#TAG");
 
-    try {
-      const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
-      const response = await axios.get(url, { timeout: 5000 });
+    const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
 
-      return res.send(`🎮 ${name}#${tag} | ${String(response.data).trim()}`);
-    } catch (err) {
-      return res.send(`🎮 No se encontraron datos para ${name}#${tag}.`);
-    }
+    https.get(url, { timeout: 4000 }, (response) => {
+      let data = "";
+      response.on("data", (chunk) => (data += chunk));
+      response.on("end", () => {
+        let result = data.trim();
+        if (result.length > 200) result = result.substring(0, 197) + "...";
+        res.send(`🎮 ${name}#${tag} | ${result}`);
+      });
+    }).on("error", () => {
+      res.send(`🎮 No se pudieron obtener datos para ${name}#${tag}.`);
+    });
+    return;
   }
 
-  return res.send("Servidor activo");
+  return res.send("OK");
 };
