@@ -5,52 +5,42 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
-  // Añadimos la hora actual a la respuesta para forzar que Vercel no use caché
-  console.log("Nueva petición recibida a las: " + new Date().toISOString());
-
   const { action, q } = req.query;
 
-  // ==============================
-  // 1. COMANDO DE IA (!ia)
-  // ==============================
+  // COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q) return res.send("❌ Hazme una pregunta. Ejemplo: !ia ¿Cuál es el mejor mapa?");
+    if (!q) return res.send("❌ Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
 
     try {
-      // Usamos el modelo 'openai' que suele ser más rápido y preciso para respuestas cortas
-      // Y añadimos un prompt interno más agresivo para pedir brevedad
-      const systemPrompt = encodeURIComponent("Responde en español, muy corto, máximo 1 frase, menos de 80 caracteres. No te enrolles.");
-      const userPrompt = encodeURIComponent(q);
-      const url = `https://text.pollinations.ai/${userPrompt}?system=${systemPrompt}&model=openai`;
+      // API optimizada para respuestas cortas sin HTML
+      const url = `https://api.simsimi.vn/v1/simtalk`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ text: q, lc: "es" })
+      });
 
-      const response = await fetch(url);
-      
-      if (!response.ok) return res.send("🤖 La IA está saturada, prueba luego.");
-
-      let text = await response.text();
-      
-      // Limpieza profunda de texto (quitar saltos de línea, asteriscos, etc.)
-      text = text.replace(/[\r\n\*]+/g, " ").trim();
-
-      // <--- CAMBIO AQUÍ: RECORTE EXTREMO --->
-      // Recortamos a 140 caracteres. ¡Twitch permite 400, así que esto es súper seguro!
-      // Si cortamos el texto, añadimos "..." al final.
-      if (text.length > 140) {
-        text = text.substring(0, 137) + "...";
+      if (!response.ok) {
+        return res.send("🤖 La IA está descansando un momento.");
       }
 
-      return res.send(`🤖 ${text}`);
+      const data = await response.json();
+      let reply = data.message || "🤖 Sin respuesta.";
+
+      // Corte estricto a 150 caracteres
+      if (reply.length > 150) {
+        reply = reply.substring(0, 147) + "...";
+      }
+
+      return res.send(`🤖 ${reply}`);
     } catch {
-      return res.send("❌ Error al conectar con la IA.");
+      return res.send("🤖 La IA no pudo responder ahora.");
     }
   }
 
-  // ==============================
-  // 2. COMANDO DE RANK (!rank)
-  // ==============================
+  // COMANDO DE RANK (!rank)
   if (action === "rank") {
-    // (El código de rank se mantiene igual, ya que este no suele dar problemas de longitud)
-    if (!q) return res.send("❌ Uso correcto: !rank TuNombre#TuTag (Ejemplo: !rank Mixwell#EUW)");
+    if (!q) return res.send("❌ Uso correcto: !rank TuNombre#TuTag");
 
     let name = "";
     let tag = "";
@@ -66,7 +56,7 @@ export default async function handler(req, res) {
     }
 
     if (!name || !tag) {
-      return res.send("❌ Usa el formato: !rank Nombre#TAG (Ejemplo: !rank Mixwell#EUW)");
+      return res.send("❌ Formato: !rank Nombre#TAG (Ejemplo: !rank Mixwell#EUW)");
     }
 
     try {
@@ -84,5 +74,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.send("🤖 Servidor activo v2.1."); // <--- CAMBIO AQUÍ: Versión para confirmar redespliegue
+  return res.send("🤖 Servidor listo.");
 }
