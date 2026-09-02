@@ -1,48 +1,95 @@
-module.exports = async (req, res) => {
+const https = require("https");
+
+module.exports = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
   const action = req.query.action || "";
   const q = req.query.q || "";
 
-  // COMANDO IA
+  // 1. COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q.trim()) return res.send("🤖 Escribe una pregunta.");
-
-    try {
-      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=Responde+en+espanol+en+una+frase+corta`);
-      if (!response.ok) return res.send("🤖 La IA no está disponible.");
-
-      let text = await response.text();
-      text = text.replace(/[\r\n]+/g, " ").trim();
-      if (text.length > 150) text = text.substring(0, 147) + "...";
-
-      return res.send(`🤖 ${text}`);
-    } catch {
-      return res.send("🤖 Tiempo de respuesta agotado.");
+    if (!q || !q.trim()) {
+      return res.send("🤖 Escribe una pregunta. Ejemplo: !ia hola");
     }
+
+    const postData = new URLSearchParams({ text: q, lc: "es" }).toString();
+
+    const options = {
+      hostname: "api.simsimi.vn",
+      path: "/v1/simtalk",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(postData)
+      },
+      timeout: 3000
+    };
+
+    const request = https.request(options, (response) => {
+      let body = "";
+      response.on("data", (chunk) => (body += chunk));
+      response.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          let reply = data.message || "Sin respuesta.";
+          reply = reply.replace(/[\r\n]+/g, " ").trim();
+          if (reply.length > 150) reply = reply.substring(0, 147) + "...";
+          res.send(`🤖 ${reply}`);
+        } catch {
+          res.send("🤖 La IA devolvió una respuesta no válida.");
+        }
+      });
+    });
+
+    request.on("error", () => res.send("🤖 Error de conexión con la IA."));
+    request.on("timeout", () => {
+      request.destroy();
+      res.send("🤖 Tiempo agotado.");
+    });
+
+    request.write(postData);
+    request.end();
+    return;
   }
 
-  // COMANDO RANK
+  // 2. COMANDO DE RANK (!rank)
   if (action === "rank") {
-    if (!q.trim()) return res.send("🎮 Usa: !rank Nombre#Tag");
-
-    const parts = q.includes("#") ? q.split("#") : q.split(" ");
-    const name = (parts[0] || "").trim();
-    const tag = (parts[1] || "").trim();
-
-    if (!name || !tag) return res.send("🎮 Formato incorrecto. Ejemplo: !rank Nombre#Tag");
-
-    try {
-      const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
-      const response = await fetch(url);
-      if (!response.ok) return res.send(`🎮 No hay datos para ${name}#${tag}.`);
-
-      let result = await response.text();
-      return res.send(`🎮 ${name}#${tag} | ${result.trim()}`);
-    } catch {
-      return res.send("🎮 Error al consultar el rango.");
+    if (!q || !q.trim()) {
+      return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
     }
+
+    let name = "";
+    let tag = "";
+
+    if (q.includes("#")) {
+      const parts = q.split("#");
+      name = parts[0].trim();
+      tag = parts[1].trim();
+    } else {
+      const parts = q.trim().split(" ");
+      name = parts[0] || "";
+      tag = parts[1] || "";
+    }
+
+    if (!name || !tag) {
+      return res.send("🎮 Formato: !rank Nombre#TAG (Ejemplo: !rank ptrs#444)");
+    }
+
+    const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
+
+    https.get(targetUrl, { timeout: 3000 }, (response) => {
+      let data = "";
+      response.on("data", (chunk) => (data += chunk));
+      response.on("end", () => {
+        let result = data.trim();
+        if (result.length > 150) result = result.substring(0, 147) + "...";
+        res.send(`🎮 ${name}#${tag} | ${result}`);
+      });
+    }).on("error", () => {
+      res.send(`🎮 No se encontraron datos para ${name}#${tag}.`);
+    });
+    return;
   }
 
   return res.send("Servidor Activo");
