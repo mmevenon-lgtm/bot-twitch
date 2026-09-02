@@ -11,17 +11,19 @@ export default async function handler(req, res) {
     if (!q) return res.send("❌ Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
     
     try {
-      const prompt = "Responde como un bot de Twitch: super corto (máximo 1 frase, menos de 100 caracteres) y en español.";
-      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=${encodeURIComponent(prompt)}`);
+      const prompt = "Responde en una sola frase corta de menos de 100 caracteres en español.";
+      const url = `https://text.pollinations.ai/${encodeURIComponent(q)}?system=${encodeURIComponent(prompt)}&model=mistral`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) return res.send("🤖 La IA no pudo responder.");
       
       let text = await response.text();
-      text = text.trim();
+      text = text.replace(/[\r\n]+/g, " ").trim();
 
-      // Recortar forzosamente para que Nightbot no dé error de 400 caracteres
-      if (text.length > 250) {
-        text = text.substring(0, 247) + "...";
+      // Recorte estricto a 300 caracteres para Nightbot
+      if (text.length > 300) {
+        text = text.substring(0, 297) + "...";
       }
 
       return res.send(`🤖 ${text}`);
