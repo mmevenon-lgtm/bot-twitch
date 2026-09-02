@@ -11,12 +11,20 @@ export default async function handler(req, res) {
     if (!q) return res.send("❌ Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
     
     try {
-      const prompt = "Responde como un bot de Twitch: de forma divertida, corta (máximo 150 caracteres) y en español.";
+      const prompt = "Responde como un bot de Twitch: super corto (máximo 1 frase, menos de 100 caracteres) y en español.";
       const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=${encodeURIComponent(prompt)}`);
       
-      if (!response.ok) return res.send("🤖 La IA está descansando, intenta de nuevo.");
-      const text = await response.text();
-      return res.send(`🤖 ${text.trim()}`);
+      if (!response.ok) return res.send("🤖 La IA no pudo responder.");
+      
+      let text = await response.text();
+      text = text.trim();
+
+      // Recortar forzosamente para que Nightbot no dé error de 400 caracteres
+      if (text.length > 250) {
+        text = text.substring(0, 247) + "...";
+      }
+
+      return res.send(`🤖 ${text}`);
     } catch {
       return res.send("❌ Error al conectar con la IA.");
     }
@@ -24,14 +32,14 @@ export default async function handler(req, res) {
 
   // COMANDO DE RANK (!rank)
   if (action === "rank") {
-    if (!q) return res.send("❌ Uso correcto: !rank TuNombre TuTag (ejemplo: !rank Mixwell EUW)");
+    if (!q) return res.send("❌ Uso correcto: !rank TuNombre TuTag");
 
     const parts = q.trim().split(" ");
     const name = parts[0];
     const tag = parts[1];
 
     if (!name || !tag) {
-      return res.send("❌ Debes incluir el nombre y el tag separados por un espacio. Ejemplo: !rank Mixwell EUW");
+      return res.send("❌ Formato incorrecto. Ejemplo: !rank Mixwell EUW");
     }
 
     try {
@@ -45,7 +53,7 @@ export default async function handler(req, res) {
       const result = await response.text();
       return res.send(`🎮 ${name}#${tag} | ${result.trim()}`);
     } catch {
-      return res.send("⚠️ La API de VALORANT tardó demasiado. Inténtalo de nuevo.");
+      return res.send("⚠️ La API de VALORANT tardó demasiado.");
     }
   }
 
