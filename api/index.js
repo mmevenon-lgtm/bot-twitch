@@ -8,20 +8,31 @@ module.exports = async (req, res) => {
 
   // COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q) return res.send("🤖 Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q) return res.send("🤖 Hazme una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
 
     try {
-      const response = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(q)}`, {
-        params: { system: "Responde en español en 1 frase muy corta." },
-        timeout: 4000
+      // API ligera y sin timeouts de generación
+      const url = `https://api.simsimi.vn/v1/simtalk`;
+      const bodyParams = new URLSearchParams();
+      bodyParams.append("text", q);
+      bodyParams.append("lc", "es");
+
+      const response = await axios.post(url, bodyParams, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 5000
       });
 
-      let text = String(response.data).replace(/[\r\n]+/g, " ").trim();
-      if (text.length > 150) text = text.substring(0, 147) + "...";
+      let reply = response.data?.message || "Sin respuesta.";
+      
+      // Limpieza de caracteres y recorte estricto
+      reply = reply.replace(/[\r\n]+/g, " ").trim();
+      if (reply.length > 150) {
+        reply = reply.substring(0, 147) + "...";
+      }
 
-      return res.send(`🤖 ${text}`);
+      return res.send(`🤖 ${reply}`);
     } catch (err) {
-      return res.send("🤖 La IA tardó en responder. Intenta de nuevo.");
+      return res.send("🤖 La IA no pudo responder en este momento.");
     }
   }
 
@@ -46,7 +57,7 @@ module.exports = async (req, res) => {
 
     try {
       const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
-      const response = await axios.get(url, { timeout: 4000 });
+      const response = await axios.get(url, { timeout: 5000 });
 
       return res.send(`🎮 ${name}#${tag} | ${String(response.data).trim()}`);
     } catch (err) {
