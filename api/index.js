@@ -4,15 +4,18 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
-  const { action, q } = req.query;
+  const action = req.query.action;
+  const q = req.query.q;
 
   // 1. COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q) return res.send("🤖 Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q || q.trim() === "") {
+      return res.send("🤖 Hazme una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    }
 
     try {
       const postData = new URLSearchParams({ text: q, lc: "es" }).toString();
-      
+
       const options = {
         hostname: "api.simsimi.vn",
         path: "/v1/simtalk",
@@ -49,14 +52,16 @@ module.exports = async (req, res) => {
       request.write(postData);
       request.end();
     } catch {
-      return res.send("🤖 Error en la solicitud de IA.");
+      return res.send("🤖 Error al procesar la IA.");
     }
     return;
   }
 
   // 2. COMANDO DE RANK (!rank)
   if (action === "rank") {
-    if (!q) return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
+    if (!q || q.trim() === "") {
+      return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
+    }
 
     let name = "";
     let tag = "";
@@ -73,9 +78,9 @@ module.exports = async (req, res) => {
 
     if (!name || !tag) return res.send("🎮 Usa el formato: !rank Nombre#TAG");
 
-    const url = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
+    const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
 
-    https.get(url, { timeout: 4000 }, (response) => {
+    https.get(targetUrl, { timeout: 4000 }, (response) => {
       let data = "";
       response.on("data", (chunk) => (data += chunk));
       response.on("end", () => {
@@ -89,5 +94,5 @@ module.exports = async (req, res) => {
     return;
   }
 
-  return res.send("OK");
+  return res.send("Servidor activo");
 };
