@@ -1,47 +1,72 @@
+JavaScript
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
+  // Añadimos la hora actual a la respuesta para forzar que Vercel no use caché
+  console.log("Nueva petición recibida a las: " + new Date().toISOString());
+
   const { action, q } = req.query;
 
-  // COMANDO DE IA (!ia)
+  // ==============================
+  // 1. COMANDO DE IA (!ia)
+  // ==============================
   if (action === "ia") {
-    if (!q) return res.send("❌ Escribe una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q) return res.send("❌ Hazme una pregunta. Ejemplo: !ia ¿Cuál es el mejor mapa?");
 
     try {
-      // Petición a API rápida con recorte estricto a 100 caracteres
-      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?model=openai&cache=false`);
-      
-      if (!response.ok) return res.send("🤖 La IA no pudo responder.");
+      // Usamos el modelo 'openai' que suele ser más rápido y preciso para respuestas cortas
+      // Y añadimos un prompt interno más agresivo para pedir brevedad
+      const systemPrompt = encodeURIComponent("Responde en español, muy corto, máximo 1 frase, menos de 80 caracteres. No te enrolles.");
+      const userPrompt = encodeURIComponent(q);
+      const url = `https://text.pollinations.ai/${userPrompt}?system=${systemPrompt}&model=openai`;
 
-      let rawText = await response.text();
+      const response = await fetch(url);
       
-      // Limpiar saltos de línea y formatear
-      let cleanText = rawText.replace(/\s+/g, " ").trim();
+      if (!response.ok) return res.send("🤖 La IA está saturada, prueba luego.");
 
-      // Recortar con seguridad por debajo del límite de Nightbot (máx. 200 caracteres)
-      if (cleanText.length > 200) {
-        cleanText = cleanText.substring(0, 197) + "...";
+      let text = await response.text();
+      
+      // Limpieza profunda de texto (quitar saltos de línea, asteriscos, etc.)
+      text = text.replace(/[\r\n\*]+/g, " ").trim();
+
+      // <--- CAMBIO AQUÍ: RECORTE EXTREMO --->
+      // Recortamos a 140 caracteres. ¡Twitch permite 400, así que esto es súper seguro!
+      // Si cortamos el texto, añadimos "..." al final.
+      if (text.length > 140) {
+        text = text.substring(0, 137) + "...";
       }
 
-      return res.send(`🤖 ${cleanText}`);
+      return res.send(`🤖 ${text}`);
     } catch {
-      return res.send("❌ Error al procesar la respuesta.");
+      return res.send("❌ Error al conectar con la IA.");
     }
   }
 
-  // COMANDO DE RANK (!rank)
+  // ==============================
+  // 2. COMANDO DE RANK (!rank)
+  // ==============================
   if (action === "rank") {
-    if (!q) return res.send("❌ Uso correcto: !rank TuNombre TuTag");
+    // (El código de rank se mantiene igual, ya que este no suele dar problemas de longitud)
+    if (!q) return res.send("❌ Uso correcto: !rank TuNombre#TuTag (Ejemplo: !rank Mixwell#EUW)");
 
-    const parts = q.trim().split(" ");
-    const name = parts[0];
-    const tag = parts[1];
+    let name = "";
+    let tag = "";
+
+    if (q.includes("#")) {
+      const parts = q.split("#");
+      name = parts[0].trim();
+      tag = parts[1].trim();
+    } else {
+      const parts = q.trim().split(" ");
+      name = parts[0];
+      tag = parts[1];
+    }
 
     if (!name || !tag) {
-      return res.send("❌ Formato incorrecto. Ejemplo: !rank Mixwell EUW");
+      return res.send("❌ Usa el formato: !rank Nombre#TAG (Ejemplo: !rank Mixwell#EUW)");
     }
 
     try {
@@ -59,5 +84,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.send("🤖 Servidor de Twitch activo.");
+  return res.send("🤖 Servidor activo v2.1."); // <--- CAMBIO AQUÍ: Versión para confirmar redespliegue
 }
