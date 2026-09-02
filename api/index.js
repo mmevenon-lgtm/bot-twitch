@@ -1,3 +1,5 @@
+const axios = require("axios");
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -7,31 +9,32 @@ module.exports = async (req, res) => {
 
   // 1. COMANDO DE IA (!ia)
   if (action === "ia") {
-    if (!q || !q.trim()) return res.send("🤖 Pregúntame algo. Ejemplo: !ia ¿Qué es Valorant?");
+    if (!q || !q.trim()) {
+      return res.send("🤖 Hazme una pregunta. Ejemplo: !ia ¿Qué es Valorant?");
+    }
 
     try {
-      // Usamos la API pública de Pollinations sin headers complejos (responde en milisegundos)
-      const prompt = encodeURIComponent("Responde en español, 1 frase muy corta, sin saltos de línea.");
-      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(q)}?system=${prompt}`);
+      const response = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(q)}`, {
+        params: { system: "Responde en español en menos de 10 palabras." },
+        timeout: 2500
+      });
 
-      if (!response.ok) return res.send("🤖 La IA no está disponible en este momento.");
-
-      let text = await response.text();
-      text = text.replace(/[\r\n]+/g, " ").trim();
-
-      if (text.length > 150) {
-        text = text.substring(0, 147) + "...";
+      let text = String(response.data).replace(/[\r\n]+/g, " ").trim();
+      if (text.length > 120) {
+        text = text.substring(0, 117) + "...";
       }
 
       return res.send(`🤖 ${text}`);
-    } catch {
+    } catch (err) {
       return res.send("🤖 La IA tardó demasiado en responder.");
     }
   }
 
   // 2. COMANDO DE RANK (!rank)
   if (action === "rank") {
-    if (!q || !q.trim()) return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
+    if (!q || !q.trim()) {
+      return res.send("🎮 Uso correcto: !rank TuNombre#TuTag");
+    }
 
     let name = "";
     let tag = "";
@@ -46,31 +49,22 @@ module.exports = async (req, res) => {
       tag = parts[1];
     }
 
-    if (!name || !tag) return res.send("🎮 Formato correcto: !rank Nombre#TAG");
+    if (!name || !tag) {
+      return res.send("🎮 Formato correcto: !rank Nombre#TAG");
+    }
 
     try {
       const targetUrl = `https://api.kyroskoh.xyz/valorant/v1/mmr/eu/${encodeURIComponent(name)}/${encodeURIComponent(tag)}?show=combo&display=0`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500); // Cancela si la API tarda más de 3.5s
+      const response = await axios.get(targetUrl, { timeout: 2500 });
 
-      const response = await fetch(targetUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        return res.send(`🎮 No se encontraron datos para ${name}#${tag}.`);
-      }
-
-      let result = await response.text();
-      result = result.trim();
-
-      if (result.length > 180) {
-        result = result.substring(0, 177) + "...";
+      let result = String(response.data).trim();
+      if (result.length > 150) {
+        result = result.substring(0, 147) + "...";
       }
 
       return res.send(`🎮 ${name}#${tag} | ${result}`);
-    } catch {
-      return res.send(`🎮 La API de Valorant no respondió a tiempo para ${name}#${tag}.`);
+    } catch (err) {
+      return res.send(`🎮 La API de Valorant no respondió a tiempo.`);
     }
   }
 
